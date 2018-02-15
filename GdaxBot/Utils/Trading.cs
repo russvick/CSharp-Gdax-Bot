@@ -1,4 +1,5 @@
 ﻿using GdaxBot.Models;
+using GdaxBot.TradingData;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,18 +11,19 @@ namespace GdaxBot
 {
     class Trading
     {
-        private static double _lastSma = 0;
-        private static double _lastEma = 0;
-        private static int boughtOrSold = 0;
-        private static APIConnect _api;
-        private static double funds = 10000;
-        private static double btcHolding = 0.0;
-        private static int counter = 0;
+        private double _lastSma = 0;
+        private double _lastEma = 0;
+        private int boughtOrSold = 0;
+        private CandleSticksStrategies _candlestickStragey;
+        private double funds = 10000;
+        private double btcHolding = 0.0;
+        private int counter = 0;
         private static string mydocpath = @"C:\Users\Russ\Desktop\TransactionLog";
 
         public double LastSma { get { return _lastSma; } }
         public double LastEma { get { return _lastEma; } }
         public double Funds { get { return funds; } }
+
         public int EmaTimePeriod { get; set; }
         public int EmaGranularity { get; set; }
 
@@ -30,47 +32,56 @@ namespace GdaxBot
 
         public Trading()
         {
-            _api = new APIConnect();
+            _candlestickStragey = new CandleSticksStrategies();
         }
 
-        public void Process()
+        public Tuple<double,double,double> EmaSmaCrossover(int smaTimePeriod, int smaGranularity, int emaTimePeriod, int emaGranularity)
         {
-            var movingAvg = _api.GetMovingAverages(15, 60, 10, 60).Result;
+            //for logging
+            SmaTimePeriod = smaTimePeriod;
+            SmaGranularity = smaGranularity;
+            EmaTimePeriod = emaTimePeriod;
+            EmaGranularity = emaGranularity;
+
+            var movingAvg = _candlestickStragey.GetMovingAverages(smaTimePeriod, smaGranularity, emaTimePeriod, emaGranularity).Result;
             double sma = movingAvg.Item1;
             double ema = movingAvg.Item2;
+            double buysellThreshold = Math.Abs(sma - ema);
 
-            //If this is our first run then we will send a buy order
             if (_lastEma == 0 && _lastSma == 0)
             {
                 _lastSma = sma;
                 _lastEma = ema;
-                boughtOrSold = 1;
-                BuyCoin(100, ema, sma);
             }
-            else if ((_lastSma < _lastEma && sma > ema) || (_lastSma > _lastEma && sma < ema))
+
+            //If this is our first run then set an sma/ema
+            else if (buysellThreshold > 5)
             {
-                //if out last order was buy (1) then we will sell
-                if (boughtOrSold == 1)
+                if (_lastSma < _lastEma && sma > ema)
                 {
                     boughtOrSold = 0;
                     SellCoin(100, ema, sma);
+                    return new Tuple<double, double, double>(_lastSma, _lastEma, funds);
                 }
-                else
+                else if (_lastSma > _lastEma && sma < ema)
                 {
                     boughtOrSold = 1;
                     BuyCoin(100, ema, sma);
+                    return new Tuple<double, double, double>(_lastSma, _lastEma, funds);
                 }
 
                 _lastSma = sma;
                 _lastEma = ema;
-            }
+            }          
+           
             counter++;
+            return new Tuple<double, double, double>(_lastSma, _lastEma, 0);
         }
-
+         
         //Buy coin at current price
         public void BuyCoin(double buyAmount, double ema, double sma)
         {
-            var btcPrice = _api.CoinPrice;
+            var btcPrice = _candlestickStragey.CoinPrice;
 
             funds -= buyAmount;
 
@@ -78,7 +89,8 @@ namespace GdaxBot
 
             using (StreamWriter w = File.AppendText(mydocpath))
             {
-                Log($"Bought BTC at: ${btcPrice}\r\nEma Price: {ema}\r\nSma Price: {sma}", w);
+                Log($"Ema/Sma: {SmaTimePeriod}" + "/" + 
+                    $"{EmaTimePeriod}\r\nBought BTC at: ${btcPrice}\r\nEma Price: {ema}\r\nSma Price: {sma}\r\nCurrent Funds: {funds}", w);
             }
         }
 
@@ -87,7 +99,7 @@ namespace GdaxBot
         {
             string transactionDescription = string.Empty;
 
-            var btcPrice = _api.CoinPrice;
+            var btcPrice = _candlestickStragey.CoinPrice;
 
             btcHolding -= sellAmount / btcPrice;
 
@@ -95,7 +107,8 @@ namespace GdaxBot
 
             using (StreamWriter w = File.AppendText(mydocpath))
             {
-                Log($"Sold BTC at: ${btcPrice}\r\nEma Price: {ema}\r\nSma Price: {sma}", w);
+                Log($"Ema/Sma: {SmaTimePeriod}" + "/"+ 
+                    $"{EmaTimePeriod}\r\nSold BTC at: ${btcPrice}\r\nEma Price: {ema}\r\nSma Price: {sma}\r\nCurrent Funds: {funds}", w);
             }
         }
 

@@ -1,5 +1,4 @@
-﻿using System;
-namespace GdaxBot.Models
+﻿namespace GdaxBot.Models
 {
     public class CandleStick
     {
