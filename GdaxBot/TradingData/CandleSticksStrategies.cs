@@ -7,15 +7,15 @@ using System.Web.Http;
 
 namespace GdaxBot.TradingData
 {
-    static class CandleSticksStrategies
+    class CandleSticksStrategies
     {
         private static readonly int[] validGranularities = { 60, 300, 900, 3600, 21600, 86400 };
 
-        public static double CoinPrice { get; set; }
+        public double CoinPrice { get; set; }
 
-        public static string CoinType { get; set; }
+        public string CoinType { get; set; }
 
-        private static bool CheckGranularity(int granularity)
+        private bool CheckGranularity(int granularity)
         {
             foreach (var item in validGranularities)
             {
@@ -28,7 +28,7 @@ namespace GdaxBot.TradingData
             return false;
         }
         
-        public static async Task<List<CandleStick>> GetCandleStickData(int minutes, int granularity, string productId)
+        public async Task<List<CandleStick>> GetCandleStickData(int minutes, int granularity, string productId)
         {
             if (!CheckGranularity(granularity))
             {
@@ -73,7 +73,7 @@ namespace GdaxBot.TradingData
             return candleList;
         }       
 
-        public static async Task<double> GetSlopes(int minutes, int granularity, string productId)
+        public async Task<double> GetSlopes(int minutes, int granularity, string productId)
         {
             List<CandleStick> candles = new List<CandleStick>();
             double dataPointsOverTime = minutes * 60 / granularity;
@@ -100,7 +100,7 @@ namespace GdaxBot.TradingData
             return retSlope;
         }
 
-        public static async Task<double> GetSMA(int minuteDifference, int granularity)
+        public async Task<double> GetSMA(int minuteDifference, int granularity)
         {
             double sum = 0.0;
             double sma = 0.0;
@@ -122,7 +122,7 @@ namespace GdaxBot.TradingData
             return sma;
         }
 
-        public static async Task<double> GetEMA(int minuteDifference, int granularity)
+        public async Task<double> GetEMA(int minuteDifference, int granularity)
         {
             double ema = 0.0;
 
@@ -143,7 +143,7 @@ namespace GdaxBot.TradingData
             return ema;
         }
 
-        public static async Task<Tuple<double, double>> GetMovingAverages(int smaMinuteDifference, int smaGraularity, int emaMinuteDifference, int emaGranularity)
+        public async Task<Tuple<double, double>> GetMovingAverages(int smaMinuteDifference, int smaGraularity, int emaMinuteDifference, int emaGranularity)
         {
             double sum = 0.0;
             double ema = 0.0;

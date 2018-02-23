@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace GdaxBot
@@ -12,9 +13,11 @@ namespace GdaxBot
     {
         private double _lastSma = 0;
         private double _lastEma = 0;
+        private double _lastSlope = 0;
         private double funds = 10000;
         private double btcHolding = 0.0;
         private int counter = 0;
+        public CandleSticksStrategies CandleStickStrat = new CandleSticksStrategies();
         private static string mydocpath = @"C:\Users\Russ\Desktop\TransactionLog";
         private SellAction _lastAction = SellAction.None;
         private List<SMA> _smas;
@@ -31,6 +34,8 @@ namespace GdaxBot
         public int SmaTimePeriod { get; set; }
         public int SmaGranularity { get; set; }
 
+        public Trading(){}
+
         public Trading(int buysellthreshold, int smaTimePeriod, int smaGranularity, int emaTimePeriod, int emaGranularity, string coinType)
         {
             BuySellThreshold = buysellthreshold;
@@ -39,26 +44,58 @@ namespace GdaxBot
             EmaTimePeriod = emaTimePeriod;
             EmaGranularity = emaGranularity;
             CoinType = coinType;
-            CandleSticksStrategies.CoinType = coinType;
+            CandleStickStrat.CoinType = coinType;
         }
         
-        public string SMATripleCrossover(SMA smas)
+        public string SMATripleCrossover(List<SMA> smas)
         {
-            //if(smas.Count < 3){ return null; }
+            //Get all the smas we need to look at and order the list in asc order
+            List<double> slopes = new List<double>();
+            foreach(var item in smas)
+            {
+                slopes.Add(CandleStickStrat.GetSlopes(item.TimePeriod, item.Granularity, CoinType).Result);                
+            }
 
-            //get all the smas we need to look at and order the list in asc order
-            //smas.OrderBy(x => x.TimePeriod);
-            //List<double> calcedSma = new List<double>();
+            //If we haven't initialized a slope set one
+            if(SlopesAreSame(slopes) && _lastSlope == 0)
+            {
+                _lastSlope = slopes.Sum();
+            }
+            else if(SlopesAreSame(slopes))
+            {
+                if (_lastSlope < 0 && slopes.Sum() > 0)
+                {
+                    //buy order
+                    BuyCoin(100);
+                    return $"Bought on triple cross over\nCurrent Funds: {Funds}";
+                }
+                else if (_lastSlope > 0 && slopes.Sum() < 0)
+                {
+                    //sell order
+                    SellCoin(100);
+                    return $"Sold on triple cross over\nCurrent Funds: {Funds}";
+                }
+            }
+            return null;           
+        }
 
-            var dub = CandleSticksStrategies.GetSlopes(smas.TimePeriod, smas.Granularity, CoinType).Result;
-
-            return "";
+        private bool SlopesAreSame(List<double> slopes)
+        {
+            if (slopes.All(x => x > 0) || slopes.All(x => x < 0))
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
         }
 
         public async Task<Tuple<double,double,double>> EmaSmaCrossover()
         {
-            double sma = await CandleSticksStrategies.GetEMA(SmaTimePeriod, SmaGranularity);
-            double ema = await CandleSticksStrategies.GetEMA(EmaTimePeriod, EmaGranularity);
+            double sma = await CandleStickStrat.GetSMA(SmaTimePeriod, SmaGranularity);
+            Thread.Sleep(2000);
+            double ema = await CandleStickStrat.GetEMA(EmaTimePeriod, EmaGranularity);
 
             double buysellThreshold = Math.Abs(sma - ema);
 
@@ -91,9 +128,9 @@ namespace GdaxBot
         }
          
         //Buy coin at current price
-        public bool BuyCoin(double buyAmount, double ema, double sma)
+        public bool BuyCoin(double buyAmount, double ema = 0.0, double sma = 0.0)
         {
-            var btcPrice = CandleSticksStrategies.CoinPrice;
+            var btcPrice = CandleStickStrat.CoinPrice;
             if(funds > 100)
             {
                 funds -= buyAmount;
@@ -111,11 +148,11 @@ namespace GdaxBot
         }
 
         //Sell coin at current price
-        public bool SellCoin(double sellAmount, double ema, double sma)
+        public bool SellCoin(double sellAmount, double ema = 0.0, double sma = 0.0)
         {
             string transactionDescription = string.Empty;
 
-            var btcPrice = CandleSticksStrategies.CoinPrice;
+            var btcPrice = CandleStickStrat.CoinPrice;
             var availableBtc = btcHolding;
             var btcSellAmount = sellAmount / btcPrice;
 
